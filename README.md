@@ -36,6 +36,16 @@ app/src/main/java/com/sacredtxd/connectionchecker/
 └── MainActivity.kt
 ```
 
+## Getting the app
+
+Every push builds a debug APK in CI and republishes it as the rolling `latest`
+prerelease, so this link always serves the newest build:
+
+**https://github.com/SacredTxd/Connectionchecker/releases/latest**
+
+The APK is debug-signed, so Android asks you to allow installation from an unknown
+source. Android 7.0 (API 24) or newer.
+
 ## Building
 
 Requires the Android SDK (compileSdk 35) and JDK 17+.
