@@ -33,7 +33,9 @@ android {
         buildConfigField(
             "String",
             "UPDATE_MANIFEST_URL",
-            "\"https://github.com/SacredTxd/Connectionchecker/releases/latest/download/version.json\"",
+            // Addressed by tag, not /releases/latest/: that path resolves only to a
+            // non-prerelease release, and the rolling build is published as a prerelease.
+            "\"https://github.com/SacredTxd/Connectionchecker/releases/download/latest/version.json\"",
         )
     }
 

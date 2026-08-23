@@ -91,7 +91,7 @@ jobs:
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
             --arg versionName "$VERSION_NAME" \
-            --arg apkUrl "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/app-release.apk" \
+            --arg apkUrl "https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/app-release.apk" \
             --arg notes "$NOTES" \
             '{versionCode: $versionCode, versionName: $versionName, apkUrl: $apkUrl, notes: $notes}' \
             > version.json
@@ -104,3 +104,23 @@ jobs:
             --notes "$VERSION_NAME — $NOTES
 
           Install app-release.apk on Android 7.0 (API 24) or newer. Later builds can be installed from inside the app via Check for updates."
+
+      # The app is useless at updating if these URLs do not resolve, so the run
+      # fails here rather than shipping a build that cannot find its own manifest.
+      - name: Verify the published update URLs resolve
+        if: >-
+          github.event_name == 'push' &&
+          github.ref_name == github.event.repository.default_branch
+        run: |
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/latest"
+
+          MANIFEST=$(curl -sSL --retry 5 --retry-delay 3 --retry-all-errors "$BASE/version.json")
+          echo "$MANIFEST"
+          echo "$MANIFEST" | jq -e '.versionCode == '"$VERSION_CODE" > /dev/null \
+            || { echo "Published manifest does not advertise version $VERSION_CODE"; exit 1; }
+
+          APK_URL=$(echo "$MANIFEST" | jq -r '.apkUrl')
+          CODE=$(curl -sSL --retry 5 --retry-delay 3 --retry-all-errors \
+            -o /dev/null -w '%{http_code}' "$APK_URL")
+          test "$CODE" = "200" || { echo "APK URL $APK_URL returned $CODE"; exit 1; }
+          echo "Manifest and APK URLs both resolve."
