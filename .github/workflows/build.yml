@@ -6,9 +6,15 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A superseded run is cancelled rather than left to burn runner minutes.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +28,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
-
+      # The APK is assembled and uploaded before the tests run, so a hanging or
+      # failing test still leaves a downloadable build.
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -34,6 +39,10 @@ jobs:
           name: connection-checker-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Run unit tests
+        timeout-minutes: 10
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
       - name: Upload test reports
         if: always()
