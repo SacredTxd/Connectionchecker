@@ -39,6 +39,33 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Gating this on the secret would make it skip in exactly the case it exists to
+      # catch, so it runs unconditionally for builds that will be published.
+      - name: Require the signing secrets
+        if: >-
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          github.ref_name == github.event.repository.default_branch
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=""
+          test -n "$KEYSTORE_BASE64"   || missing="$missing KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD" || missing="$missing KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"         || missing="$missing KEY_ALIAS"
+          test -n "$KEY_PASSWORD"      || missing="$missing KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            echo "Add them as repository secrets under Settings -> Secrets and variables"
+            echo "-> Actions -> Repository secrets (not Environment or Dependabot secrets):"
+            echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
+            echo "Without them the build falls back to debug signing and cannot update"
+            echo "an installed copy of the app."
+            exit 1
+          fi
+          echo "All four signing secrets are present."
+
       - name: Decode the signing keystore
         id: keystore
         if: env.KEYSTORE_BASE64 != ''
@@ -57,7 +84,6 @@ jobs:
       # Proves the published build carries the release key rather than the debug one,
       # since an APK signed with the wrong key cannot update an installed copy.
       - name: Verify the APK signature
-        if: env.KEYSTORE_BASE64 != ''
         env:
           EXPECTED_SHA256: 32DCC8B46E64FD24BFD1697EF60BFE6C8DB45FD7AC847ADE2C24ABFF6BD807DE
         run: |
