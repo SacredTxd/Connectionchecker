@@ -20,9 +20,9 @@ class ReachabilityChecker(
         URL(url).openConnection() as HttpURLConnection
     },
     private val elapsedNanos: () -> Long = System::nanoTime,
-) {
+) : ReachabilityProbe {
 
-    suspend fun check(): ReachabilityResult = withContext(Dispatchers.IO) {
+    override suspend fun check(): ReachabilityResult = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
         val startedAt = elapsedNanos()
         try {

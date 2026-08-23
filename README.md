@@ -25,6 +25,7 @@ app/src/main/java/com/sacredtxd/connectionchecker/
 │   ├── ConnectionEventStore.kt   Bounded JSON-backed history log
 │   └── ConnectionRepository.kt   Single source of truth for the UI and service
 ├── monitor/
+│   ├── ConnectivitySource.kt     Interfaces the repository depends on
 │   ├── NetworkStatusMonitor.kt   ConnectivityManager callbacks as a cold Flow
 │   └── ReachabilityChecker.kt    HTTP probe with latency measurement
 ├── service/
@@ -41,6 +42,17 @@ Requires the Android SDK (compileSdk 35) and JDK 17+.
 
 ```
 ./gradlew assembleDebug
+./gradlew testDebugUnitTest
+```
+
+## Testing
+
+`ConnectionRepository` depends on the `ConnectivitySource` and `ReachabilityProbe`
+interfaces rather than their Android-coupled implementations, so the repository, the
+history store, the summary rollup and the probe's result mapping are all covered by
+plain JVM unit tests with no emulator or Robolectric runtime needed.
+
+```
 ./gradlew testDebugUnitTest
 ```
 

@@ -1,7 +1,7 @@
 package com.sacredtxd.connectionchecker.data
 
-import com.sacredtxd.connectionchecker.monitor.NetworkStatusMonitor
-import com.sacredtxd.connectionchecker.monitor.ReachabilityChecker
+import com.sacredtxd.connectionchecker.monitor.ConnectivitySource
+import com.sacredtxd.connectionchecker.monitor.ReachabilityProbe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -11,13 +11,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
- * Single source of truth for connection state: platform status from
- * [NetworkStatusMonitor], endpoint latency from [ReachabilityChecker], and the
+ * Single source of truth for connection state: platform status from a
+ * [ConnectivitySource], endpoint latency from a [ReachabilityProbe], and the
  * persisted history in [ConnectionEventStore].
  */
 class ConnectionRepository(
-    private val monitor: NetworkStatusMonitor,
-    private val reachabilityChecker: ReachabilityChecker,
+    private val monitor: ConnectivitySource,
+    private val reachabilityChecker: ReachabilityProbe,
     private val store: ConnectionEventStore,
     scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,

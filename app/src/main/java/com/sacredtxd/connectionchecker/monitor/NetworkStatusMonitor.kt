@@ -18,12 +18,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * changes. The flow is cold: the callback is registered on collection and unregistered
  * when collection stops.
  */
-class NetworkStatusMonitor(private val context: Context) {
+class NetworkStatusMonitor(private val context: Context) : ConnectivitySource {
 
     private val connectivityManager: ConnectivityManager?
         get() = context.getSystemService()
 
-    fun statusFlow(): Flow<NetworkStatus> = callbackFlow {
+    override fun statusFlow(): Flow<NetworkStatus> = callbackFlow {
         val manager = connectivityManager
         if (manager == null) {
             trySend(NetworkStatus.Offline)
@@ -58,8 +58,7 @@ class NetworkStatusMonitor(private val context: Context) {
         awaitClose { runCatching { manager.unregisterNetworkCallback(callback) } }
     }.distinctUntilChanged()
 
-    /** Reads connectivity synchronously, for one-shot checks outside the flow. */
-    fun currentStatus(): NetworkStatus {
+    override fun currentStatus(): NetworkStatus {
         val manager = connectivityManager ?: return NetworkStatus.Offline
         val network = manager.activeNetwork ?: return NetworkStatus.Offline
         val capabilities = manager.getNetworkCapabilities(network) ?: return NetworkStatus.Offline
