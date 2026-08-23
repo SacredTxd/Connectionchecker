@@ -18,6 +18,7 @@ import com.sacredtxd.connectionchecker.MainActivity
 import com.sacredtxd.connectionchecker.R
 import com.sacredtxd.connectionchecker.data.ConnectionEvent
 import com.sacredtxd.connectionchecker.data.ReachabilityResult
+import com.sacredtxd.connectionchecker.data.StatusBadge
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -88,7 +89,9 @@ class ConnectionMonitorService : LifecycleService() {
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_connection)
+            // The small icon carries the latency itself, so the current ping is
+            // readable in the status bar without opening the shade.
+            .setSmallIcon(StatusBadgeIcon.of(StatusBadge.format(event)))
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setContentIntent(contentIntent)

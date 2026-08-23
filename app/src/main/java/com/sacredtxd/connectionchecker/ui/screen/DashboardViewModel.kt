@@ -6,10 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.sacredtxd.connectionchecker.data.ConnectionEvent
 import com.sacredtxd.connectionchecker.data.ConnectionRepository
 import com.sacredtxd.connectionchecker.data.ConnectionSummary
+import com.sacredtxd.connectionchecker.data.LatencyChartModel
 import com.sacredtxd.connectionchecker.data.NetworkStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class DashboardUiState(
@@ -28,6 +32,14 @@ class DashboardViewModel(private val repository: ConnectionRepository) : ViewMod
     val history: StateFlow<List<ConnectionEvent>> = repository.history
     val summary: StateFlow<ConnectionSummary> = repository.summary
     val checkInProgress: StateFlow<Boolean> = repository.checkInProgress
+
+    val chartModel: StateFlow<LatencyChartModel> = repository.history
+        .map(LatencyChartModel::from)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            LatencyChartModel.from(emptyList()),
+        )
 
     private val _monitoring = MutableStateFlow(false)
     val monitoring: StateFlow<Boolean> = _monitoring.asStateFlow()
