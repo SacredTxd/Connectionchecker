@@ -40,7 +40,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # Gating this on the secret would make it skip in exactly the case it exists to
-      # catch, so it runs unconditionally for builds that will be published.
+      # catch, so it runs unconditionally for builds that will be published. It also
+      # probes the vars context, since values added under the Variables tab rather
+      # than Secrets are the common cause and are invisible to secrets.*.
       - name: Require the signing secrets
         if: >-
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
@@ -49,22 +51,46 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          AS_VAR_KEYSTORE_BASE64: ${{ vars.KEYSTORE_BASE64 }}
+          AS_VAR_KEYSTORE_PASSWORD: ${{ vars.KEYSTORE_PASSWORD }}
+          AS_VAR_KEY_ALIAS: ${{ vars.KEY_ALIAS }}
+          AS_VAR_KEY_PASSWORD: ${{ vars.KEY_PASSWORD }}
         run: |
+          state() { if [ -n "$1" ]; then echo present; else echo absent; fi; }
+
+          echo "As secrets:"
+          echo "  KEYSTORE_BASE64   $(state "$KEYSTORE_BASE64")"
+          echo "  KEYSTORE_PASSWORD $(state "$KEYSTORE_PASSWORD")"
+          echo "  KEY_ALIAS         $(state "$KEY_ALIAS")"
+          echo "  KEY_PASSWORD      $(state "$KEY_PASSWORD")"
+          echo "As variables:"
+          echo "  KEYSTORE_BASE64   $(state "$AS_VAR_KEYSTORE_BASE64")"
+          echo "  KEYSTORE_PASSWORD $(state "$AS_VAR_KEYSTORE_PASSWORD")"
+          echo "  KEY_ALIAS         $(state "$AS_VAR_KEY_ALIAS")"
+          echo "  KEY_PASSWORD      $(state "$AS_VAR_KEY_PASSWORD")"
+
           missing=""
           test -n "$KEYSTORE_BASE64"   || missing="$missing KEYSTORE_BASE64"
           test -n "$KEYSTORE_PASSWORD" || missing="$missing KEYSTORE_PASSWORD"
           test -n "$KEY_ALIAS"         || missing="$missing KEY_ALIAS"
           test -n "$KEY_PASSWORD"      || missing="$missing KEY_PASSWORD"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing repository secrets:$missing"
-            echo "Add them as repository secrets under Settings -> Secrets and variables"
-            echo "-> Actions -> Repository secrets (not Environment or Dependabot secrets):"
+          [ -n "$missing" ] || { echo "All four signing secrets are present."; exit 0; }
+
+          if [ -n "$AS_VAR_KEYSTORE_BASE64$AS_VAR_KEYSTORE_PASSWORD$AS_VAR_KEY_ALIAS$AS_VAR_KEY_PASSWORD" ]; then
+            echo "::error::Found these values under the Variables tab, not Secrets."
+            echo "Delete them from Variables and re-add under the Secrets tab:"
             echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
-            echo "Without them the build falls back to debug signing and cannot update"
-            echo "an installed copy of the app."
-            exit 1
+            echo "Variables are readable by anyone who can see the repository, so the"
+            echo "keystore and its passwords must not stay there — treat them as leaked"
+            echo "and generate a new key if they were exposed."
+          else
+            echo "::error::Missing repository secrets:$missing"
+            echo "They are not visible as secrets or as variables, so they are either in"
+            echo "another repository, under Dependabot secrets, or scoped to an"
+            echo "Environment. Add them here as Repository secrets:"
+            echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
           fi
-          echo "All four signing secrets are present."
+          exit 1
 
       - name: Decode the signing keystore
         id: keystore
