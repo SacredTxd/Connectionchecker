@@ -13,6 +13,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sacredtxd.connectionchecker.service.ConnectionMonitorService
 import com.sacredtxd.connectionchecker.ui.screen.DashboardScreen
 import com.sacredtxd.connectionchecker.ui.screen.DashboardViewModel
+import com.sacredtxd.connectionchecker.ui.screen.UpdateViewModel
+import com.sacredtxd.connectionchecker.util.ApkInstaller
 import com.sacredtxd.connectionchecker.ui.theme.ConnectionCheckerTheme
 
 class MainActivity : ComponentActivity() {
@@ -35,10 +37,19 @@ class MainActivity : ComponentActivity() {
                 val viewModel: DashboardViewModel = viewModel(
                     factory = DashboardViewModel.Factory(repository)
                 )
+                val updateViewModel: UpdateViewModel = viewModel(
+                    factory = UpdateViewModel.Factory()
+                )
                 DashboardScreen(
                     viewModel = viewModel,
+                    updateViewModel = updateViewModel,
                     onMonitoringChanged = { enabled ->
                         if (enabled) startMonitoring() else ConnectionMonitorService.stop(this)
+                    },
+                    onInstallPermissionNeeded = {
+                        // Android 8+ gates installing by source app; send the user to
+                        // the settings screen that grants it, then they tap Install again.
+                        startActivity(ApkInstaller.installPermissionIntent(this))
                     },
                 )
             }

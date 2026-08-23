@@ -5,6 +5,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// CI passes the run number so every published build outranks the last; a local
+// build stays at 1, which is only ever installed by hand.
+val buildVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+val buildVersionName = "0.3.$buildVersionCode"
+
+// Release signing is configured only when CI supplies the keystore. Without it the
+// release build falls back to debug signing, so a local `assembleRelease` still works.
+val keystorePath: String? = System.getenv("KEYSTORE_PATH")
+val keystorePassword: String? = System.getenv("KEYSTORE_PASSWORD")
+val keyAlias: String? = System.getenv("KEY_ALIAS")
+val keyPassword: String? = System.getenv("KEY_PASSWORD")
+val hasReleaseSigning = !keystorePath.isNullOrBlank() && file(keystorePath).exists()
+
 android {
     namespace = "com.sacredtxd.connectionchecker"
     compileSdk = 35
@@ -13,18 +26,45 @@ android {
         applicationId = "com.sacredtxd.connectionchecker"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildVersionCode
+        versionName = buildVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_URL",
+            "\"https://github.com/SacredTxd/Connectionchecker/releases/latest/download/version.json\"",
+        )
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            // Left off deliberately: shrinking Compose and kotlinx.serialization is a
+            // runtime-failure risk that cannot be caught without a device to test on.
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -39,6 +79,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

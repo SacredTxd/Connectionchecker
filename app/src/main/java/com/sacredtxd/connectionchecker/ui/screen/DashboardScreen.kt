@@ -34,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,9 @@ private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    updateViewModel: UpdateViewModel,
     onMonitoringChanged: (Boolean) -> Unit,
+    onInstallPermissionNeeded: () -> Unit,
 ) {
     val status by viewModel.status.collectAsState()
     val lastEvent by viewModel.lastEvent.collectAsState()
@@ -61,6 +64,8 @@ fun DashboardScreen(
     val checkInProgress by viewModel.checkInProgress.collectAsState()
     val monitoring by viewModel.monitoring.collectAsState()
     val chartModel by viewModel.chartModel.collectAsState()
+    val updateStatus by updateViewModel.status.collectAsState()
+    val context = LocalContext.current
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -121,6 +126,19 @@ fun DashboardScreen(
                     },
                 )
             }
+
+            HorizontalDivider()
+
+            UpdateCard(
+                status = updateStatus,
+                installedVersionName = updateViewModel.installedVersionName,
+                onCheck = updateViewModel::check,
+                onDownload = { updateViewModel.download(context) },
+                onInstall = {
+                    if (!updateViewModel.install(context)) onInstallPermissionNeeded()
+                },
+                onDismiss = updateViewModel::dismiss,
+            )
 
             HorizontalDivider()
 

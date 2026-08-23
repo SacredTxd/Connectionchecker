@@ -68,3 +68,30 @@ plain JVM unit tests with no emulator or Robolectric runtime needed.
 
 `minSdk` is 24; `POST_NOTIFICATIONS` is requested at runtime on Android 13+, and the
 monitoring service still runs if it is denied — only the notification is suppressed.
+
+## Updating the app
+
+The app updates itself. **Check for updates** on the dashboard reads a `version.json`
+published alongside the newest release, compares its version code with the installed
+one, downloads the APK into app-private cache and hands it to the system package
+installer — which shows its own confirmation before anything is installed.
+
+Android 8.0 and newer gate installing by source app. The first time, the app sends
+you to the settings screen that grants it; approve there and tap Install again.
+
+### Release signing
+
+In-app updates only work when every build is signed with the same key: Android
+refuses to install an update whose signature differs from the installed app.
+
+CI signs the release when these repository secrets are present. Without them the
+build still succeeds, falling back to debug signing.
+
+| Secret | What it holds |
+|---|---|
+| `KEYSTORE_BASE64` | the keystore file, base64-encoded |
+| `KEYSTORE_PASSWORD` | the keystore password |
+| `KEY_ALIAS` | the key alias |
+| `KEY_PASSWORD` | the key password |
+
+The version code is the CI run number, so every published build outranks the last.

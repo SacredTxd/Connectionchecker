@@ -19,6 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      # The run number is the version code, so every published build outranks the
+      # last and the in-app updater can compare them.
+      VERSION_CODE: ${{ github.run_number }}
+      # Job-scoped so the decode step's `if` can see it: a step cannot read its own
+      # step-level env in its condition.
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -31,21 +39,31 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # The APK is assembled and uploaded before the tests run, so a hanging or
-      # failing test still leaves a downloadable build.
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Decode the signing keystore
+        id: keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
 
-      - name: Upload debug APK
+      - name: Assemble release APK
+        env:
+          KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: connection-checker-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: connection-checker-release-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Run unit tests
         timeout-minutes: 10
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+        run: ./gradlew testReleaseUnitTest --no-daemon --stacktrace
 
       - name: Upload test reports
         if: always()
@@ -55,20 +73,34 @@ jobs:
           path: app/build/reports/tests/
           if-no-files-found: ignore
 
-      # A rolling prerelease so the APK has a stable, direct download URL that
-      # always points at the newest build of the default branch. The release is
-      # recreated each time so its tag follows the commit it was built from.
-      - name: Publish the APK to the rolling release
+      # The rolling release carries the APK and the manifest the app reads to
+      # discover it, so the download URL and the version it claims stay in step.
+      - name: Publish the APK and update manifest
         if: >-
           github.event_name == 'push' &&
           github.ref_name == github.event.repository.default_branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="Debug-signed build of ${GITHUB_SHA:0:7}, rebuilt automatically on each push. Install app-debug.apk on Android 7.0 (API 24) or newer; Android will ask you to allow installation from an unknown source, because the build is debug-signed rather than release-signed."
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "No release APK at $APK"; ls -R app/build/outputs/apk; exit 1; }
+
+          VERSION_NAME="0.3.${VERSION_CODE}"
+          NOTES=$(git log -1 --pretty=%s)
+
+          jq -n \
+            --argjson versionCode "$VERSION_CODE" \
+            --arg versionName "$VERSION_NAME" \
+            --arg apkUrl "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/app-release.apk" \
+            --arg notes "$NOTES" \
+            '{versionCode: $versionCode, versionName: $versionName, apkUrl: $apkUrl, notes: $notes}' \
+            > version.json
+
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest \
-            app/build/outputs/apk/debug/app-debug.apk \
-            --title "Latest debug build" \
+            "$APK" version.json \
+            --title "Latest build ($VERSION_NAME)" \
             --prerelease \
-            --notes "$NOTES"
+            --notes "$VERSION_NAME — $NOTES
+
+          Install app-release.apk on Android 7.0 (API 24) or newer. Later builds can be installed from inside the app via Check for updates."
