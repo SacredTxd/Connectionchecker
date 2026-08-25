@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,11 +26,16 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValueCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +62,7 @@ fun DashboardScreen(
     updateViewModel: UpdateViewModel,
     onMonitoringChanged: (Boolean) -> Unit,
     onInstallPermissionNeeded: () -> Unit,
+    onQuit: () -> Unit,
 ) {
     val status by viewModel.status.collectAsState()
     val lastEvent by viewModel.lastEvent.collectAsState()
@@ -67,8 +74,35 @@ fun DashboardScreen(
     val updateStatus by updateViewModel.status.collectAsState()
     val context = LocalContext.current
 
+    var confirmQuit by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    if (confirmQuit) {
+        AlertDialog(
+            onDismissRequest = { confirmQuit = false },
+            title = { Text("Quit Connection Checker?") },
+            text = {
+                Text(
+                    if (monitoring) {
+                        "Background monitoring will stop, so no further samples are " +
+                            "recorded until you open the app again. Your history is kept."
+                    } else {
+                        "The app will close. Your history is kept."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmQuit = false
+                    onQuit()
+                }) { Text("Quit") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmQuit = false }) { Text("Cancel") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Connection Checker") }) },
@@ -158,6 +192,15 @@ fun DashboardScreen(
                     history.forEach { event -> HistoryRow(event) }
                 }
             }
+            HorizontalDivider()
+
+            OutlinedButton(
+                onClick = { confirmQuit = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Quit app")
+            }
+
             Spacer(Modifier.size(16.dp))
         }
     }

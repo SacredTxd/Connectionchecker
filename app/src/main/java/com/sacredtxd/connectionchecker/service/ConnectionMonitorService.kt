@@ -37,6 +37,7 @@ class ConnectionMonitorService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
 
         if (intent?.action == ACTION_STOP) {
+            stopForegroundAndRemoveNotification()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -59,6 +60,15 @@ class ConnectionMonitorService : LifecycleService() {
 
     private val notificationManager: NotificationManager?
         get() = getSystemService()
+
+    private fun stopForegroundAndRemoveNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
 
     private fun startInForeground(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -88,6 +98,13 @@ class ConnectionMonitorService : LifecycleService() {
             is ReachabilityResult.Failure -> "Offline — ${reachability.reason}"
         }
 
+        val stopIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, ConnectionMonitorService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             // The small icon carries the latency itself, so the current ping is
             // readable in the status bar without opening the shade.
@@ -98,6 +115,7 @@ class ConnectionMonitorService : LifecycleService() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(0, "Stop", stopIntent)
             .build()
     }
 

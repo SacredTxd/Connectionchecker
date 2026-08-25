@@ -46,6 +46,13 @@ class MainActivity : ComponentActivity() {
                     onMonitoringChanged = { enabled ->
                         if (enabled) startMonitoring() else ConnectionMonitorService.stop(this)
                     },
+                    onQuit = {
+                        // Quitting stops the background service as well, otherwise the
+                        // app would keep sampling after the user asked it to stop.
+                        ConnectionMonitorService.stop(this)
+                        viewModel.setMonitoring(false)
+                        finishAndRemoveTask()
+                    },
                     onInstallPermissionNeeded = {
                         // Android 8+ gates installing by source app; send the user to
                         // the settings screen that grants it, then they tap Install again.

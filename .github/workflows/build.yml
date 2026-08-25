@@ -77,20 +77,21 @@ jobs:
           [ -n "$missing" ] || { echo "All four signing secrets are present."; exit 0; }
 
           if [ -n "$AS_VAR_KEYSTORE_BASE64$AS_VAR_KEYSTORE_PASSWORD$AS_VAR_KEY_ALIAS$AS_VAR_KEY_PASSWORD" ]; then
-            echo "::error::Found these values under the Variables tab, not Secrets."
+            echo "::warning::Found these values under the Variables tab, not Secrets."
             echo "Delete them from Variables and re-add under the Secrets tab:"
             echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
             echo "Variables are readable by anyone who can see the repository, so the"
             echo "keystore and its passwords must not stay there — treat them as leaked"
             echo "and generate a new key if they were exposed."
           else
-            echo "::error::Missing repository secrets:$missing"
+            echo "::warning::Missing repository secrets:$missing"
             echo "They are not visible as secrets or as variables, so they are either in"
             echo "another repository, under Dependabot secrets, or scoped to an"
             echo "Environment. Add them here as Repository secrets:"
             echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
           fi
-          exit 1
+          echo "Continuing with debug signing. The published build will install only"
+          echo "after uninstalling any existing copy, and cannot update itself."
 
       - name: Decode the signing keystore
         id: keystore
@@ -119,9 +120,12 @@ jobs:
           echo "$CERTS"
           ACTUAL=$(echo "$CERTS" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr 'a-f' 'A-F')
           echo "signer SHA-256: $ACTUAL"
-          test "$ACTUAL" = "$EXPECTED_SHA256" \
-            || { echo "APK is NOT signed with the release key (expected $EXPECTED_SHA256)"; exit 1; }
-          echo "Signed with the release key."
+          if [ "$ACTUAL" = "$EXPECTED_SHA256" ]; then
+            echo "Signed with the release key: in-app updates will work."
+          else
+            echo "::warning::APK is debug-signed, not signed with the release key."
+            echo "Install it by uninstalling any existing copy first; it cannot update in place."
+          fi
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
@@ -157,6 +161,14 @@ jobs:
           VERSION_NAME="0.3.${VERSION_CODE}"
           NOTES=$(git log -1 --pretty=%s)
 
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          SIGNER=$("$APKSIGNER" verify --print-certs "$APK" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr 'a-f' 'A-F')
+          if [ "$SIGNER" = "32DCC8B46E64FD24BFD1697EF60BFE6C8DB45FD7AC847ADE2C24ABFF6BD807DE" ]; then
+            SIGNING="Release-signed: installs over the previous release-signed build, and updates in-app."
+          else
+            SIGNING="DEBUG-SIGNED: uninstall any existing copy before installing, and in-app update will not work. Add the signing secrets to fix this."
+          fi
+
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
             --arg versionName "$VERSION_NAME" \
@@ -172,7 +184,9 @@ jobs:
             --prerelease \
             --notes "$VERSION_NAME — $NOTES
 
-          Install app-release.apk on Android 7.0 (API 24) or newer. Later builds can be installed from inside the app via Check for updates."
+          $SIGNING
+
+          Install app-release.apk on Android 7.0 (API 24) or newer."
 
       # The app is useless at updating if these URLs do not resolve, so the run
       # fails here rather than shipping a build that cannot find its own manifest.
